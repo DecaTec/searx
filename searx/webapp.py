@@ -95,6 +95,8 @@ if sys.version_info[0] == 3:
     PY3 = True
 else:
     PY3 = False
+    logger.warning('\033[1;31m *** Deprecation Warning ***\033[0m')
+    logger.warning('\033[1;31m Python2 is deprecated\033[0m')
 
 # serve pages with HTTP/1.1
 from werkzeug.serving import WSGIRequestHandler
@@ -606,11 +608,11 @@ def index():
     # HTML output format
 
     # suggestions: use RawTextQuery to get the suggestion URLs with the same bang
-    suggestion_urls = map(lambda suggestion: {
-                          'url': raw_text_query.changeSearchQuery(suggestion).getFullQuery(),
-                          'title': suggestion
-                          },
-                          result_container.suggestions)
+    suggestion_urls = list(map(lambda suggestion: {
+                               'url': raw_text_query.changeSearchQuery(suggestion).getFullQuery(),
+                               'title': suggestion
+                               },
+                               result_container.suggestions))
 
     correction_urls = list(map(lambda correction: {
                                'url': raw_text_query.changeSearchQuery(correction).getFullQuery(),
