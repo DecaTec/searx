@@ -58,10 +58,7 @@ COPY --chown=searx:searx . .
 
 RUN su searx -c "/usr/bin/python3 -m compileall -q searx"; \
     touch -c --date=@${TIMESTAMP_SETTINGS} searx/settings.yml; \
-    touch -c --date=@${TIMESTAMP_UWSGI} dockerfiles/uwsgi.ini; \
-    if [ ! -z $VERSION_GITCOMMIT ]; then\
-      echo "VERSION_STRING = VERSION_STRING + \"-$VERSION_GITCOMMIT\"" >> /usr/local/searx/searx/version.py; \
-    fi
+    touch -c --date=@${TIMESTAMP_UWSGI} dockerfiles/uwsgi.ini;
 
 
 # Keep this argument at the end since it change each time

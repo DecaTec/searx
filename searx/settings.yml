@@ -1,21 +1,21 @@
 general:
     debug : False # Debug mode, only for development
-    instance_name : "searx" # displayed name
+    instance_name : "DecaTec searx" # displayed name
 
 search:
     safe_search : 0 # Filter results. 0: None, 1: Moderate, 2: Strict
     autocomplete : "" # Existing autocomplete backends: "dbpedia", "duckduckgo", "google", "startpage", "wikipedia" - leave blank to turn it off by default
-    language : "en-US"
+    language : "de"
     ban_time_on_fail : 5 # ban time in seconds after engine errors
     max_ban_time_on_fail : 120 # max ban time in seconds after engine errors
 
 server:
     port : 8888
     bind_address : "127.0.0.1" # address to listen on
-    secret_key : "ultrasecretkey" # change this!
-    base_url : False # Set custom base_url. Possible values: False or "https://your.custom.host/location/"
-    image_proxy : False # Proxying image results through searx
-    http_protocol_version : "1.0"  # 1.0 and 1.1 are supported
+    secret_key : "ultrasecretkey" # change this! openssl rand -hex 32
+    base_url : "https://searx.decatec.de" # Set custom base_url. Possible values: False or "https://your.custom.host/location/"
+    image_proxy : True # Proxying image results through searx
+    http_protocol_version : "1.1"  # 1.0 and 1.1 are supported
 
 ui:
     static_path : "" # Custom static path - leave it blank if you didn't change
@@ -529,7 +529,7 @@ engines:
     engine : qwant
     shortcut : qw
     categories : general
-    disabled : True
+    disabled : False
 
   - name : qwant images
     engine : qwant
@@ -611,7 +611,7 @@ engines:
     engine : startpage
     shortcut : sp
     timeout : 6.0
-    disabled : True
+    disabled : False
 
   - name : tokyotoshokan
     engine : tokyotoshokan
