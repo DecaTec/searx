@@ -290,7 +290,7 @@ engines:
   - name : google
     engine : google
     shortcut : go
-    diabled: True
+    disabled: True
 
   - name : google images
     engine : google_images
