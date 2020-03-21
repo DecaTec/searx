@@ -195,13 +195,13 @@ engines:
   - name : duckduckgo
     engine : duckduckgo
     shortcut : ddg
-    disabled : True
+    disabled : False
 
   - name : duckduckgo images
     engine : duckduckgo_images
     shortcut : ddi
     timeout: 3.0
-    disabled : True
+    disabled : False
 
   - name : etools
     engine : etools
@@ -286,7 +286,7 @@ engines:
     categories : it
     shortcut : gl
     timeout : 10.0
-    disabled : True
+    disabled : False
 
   - name : github
     engine : github
