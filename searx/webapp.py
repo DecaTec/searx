@@ -56,7 +56,9 @@ from flask import (
 from babel.support import Translations
 import flask_babel
 from flask_babel import Babel, gettext, format_date, format_decimal
+from flask.ctx import has_request_context
 from flask.json import jsonify
+from searx import brand
 from searx import settings, searx_dir, searx_debug
 from searx.exceptions import SearxParameterException
 from searx.engines import (
@@ -97,9 +99,8 @@ if sys.version_info[0] == 3:
     unicode = str
     PY3 = True
 else:
-    PY3 = False
-    logger.warning('\033[1;31m *** Deprecation Warning ***\033[0m')
-    logger.warning('\033[1;31m Python2 is deprecated\033[0m')
+    logger.warning('\033[1;31m Python2 is no longer supported\033[0m')
+    exit(1)
 
 # serve pages with HTTP/1.1
 from werkzeug.serving import WSGIRequestHandler
@@ -142,7 +143,7 @@ if not searx_debug \
 
 babel = Babel(app)
 
-rtl_locales = ['ar', 'arc', 'bcc', 'bqi', 'ckb', 'dv', 'fa', 'glk', 'he',
+rtl_locales = ['ar', 'arc', 'bcc', 'bqi', 'ckb', 'dv', 'fa', 'fa_IR', 'glk', 'he',
                'ku', 'mzn', 'pnb', 'ps', 'sd', 'ug', 'ur', 'yi']
 
 # used when translating category names
@@ -164,13 +165,11 @@ _flask_babel_get_translations = flask_babel.get_translations
 
 # monkey patch for flask_babel.get_translations
 def _get_translations():
-    translation_locale = request.form.get('use-translation')
-    if translation_locale:
+    if has_request_context() and request.form.get('use-translation') == 'oc':
         babel_ext = flask_babel.current_app.extensions['babel']
-        translation = Translations.load(next(babel_ext.translation_directories), 'oc')
-    else:
-        translation = _flask_babel_get_translations()
-    return translation
+        return Translations.load(next(babel_ext.translation_directories), 'oc')
+
+    return _flask_babel_get_translations()
 
 
 flask_babel.get_translations = _get_translations
@@ -335,8 +334,15 @@ def image_proxify(url):
     if not request.preferences.get_value('image_proxy'):
         return url
 
-    if url.startswith('data:image/jpeg;base64,'):
-        return url
+    if url.startswith('data:image/'):
+        # 50 is an arbitrary number to get only the beginning of the image.
+        partial_base64 = url[len('data:image/'):50].split(';')
+        if len(partial_base64) == 2 \
+           and partial_base64[0] in ['gif', 'png', 'jpeg', 'pjpeg', 'webp', 'tiff', 'bmp']\
+           and partial_base64[1].startswith('base64,'):
+            return url
+        else:
+            return None
 
     if settings.get('result_proxy'):
         return proxify(url)
@@ -355,17 +361,12 @@ def render(template_name, override_theme=None, **kwargs):
                              if (engine_name, category) not in disabled_engines)
 
     if 'categories' not in kwargs:
-        kwargs['categories'] = ['general']
-        kwargs['categories'].extend(x for x in
-                                    sorted(categories.keys())
-                                    if x != 'general'
-                                    and x in enabled_categories)
+        kwargs['categories'] = [x for x in
+                                _get_ordered_categories()
+                                if x in enabled_categories]
 
     if 'all_categories' not in kwargs:
-        kwargs['all_categories'] = ['general']
-        kwargs['all_categories'].extend(x for x in
-                                        sorted(categories.keys())
-                                        if x != 'general')
+        kwargs['all_categories'] = _get_ordered_categories()
 
     if 'selected_categories' not in kwargs:
         kwargs['selected_categories'] = []
@@ -427,7 +428,10 @@ def render(template_name, override_theme=None, **kwargs):
 
     kwargs['preferences'] = request.preferences
 
+    kwargs['brand'] = brand
+
     kwargs['scripts'] = set()
+    kwargs['endpoint'] = 'results' if 'q' in kwargs else request.endpoint
     for plugin in request.user_plugins:
         for script in plugin.js_dependencies:
             kwargs['scripts'].add(script)
@@ -439,6 +443,17 @@ def render(template_name, override_theme=None, **kwargs):
 
     return render_template(
         '{}/{}'.format(kwargs['theme'], template_name), **kwargs)
+
+
+def _get_ordered_categories():
+    ordered_categories = []
+    if 'categories_order' not in settings['ui']:
+        ordered_categories = ['general']
+        ordered_categories.extend(x for x in sorted(categories.keys()) if x != 'general')
+        return ordered_categories
+    ordered_categories = settings['ui']['categories_order']
+    ordered_categories.extend(x for x in sorted(categories.keys()) if x not in ordered_categories)
+    return ordered_categories
 
 
 @app.before_request
@@ -559,7 +574,9 @@ def index():
         search_query, raw_text_query = get_search_query_from_webapp(request.preferences, request.form)
         # search = Search(search_query) #  without plugins
         search = SearchWithPlugins(search_query, request.user_plugins, request)
+
         result_container = search.search()
+
     except Exception as e:
         # log exception
         logger.exception('search error')
@@ -575,6 +592,10 @@ def index():
     number_of_results = result_container.results_number()
     if number_of_results < result_container.results_length():
         number_of_results = 0
+
+    # checkin for a external bang
+    if result_container.redirect_url:
+        return redirect(result_container.redirect_url)
 
     # UI
     advanced_search = request.form.get('advanced_search', None)
@@ -624,7 +645,7 @@ def index():
                                     'corrections': list(result_container.corrections),
                                     'infoboxes': result_container.infoboxes,
                                     'suggestions': list(result_container.suggestions),
-                                    'unresponsive_engines': list(result_container.unresponsive_engines)},
+                                    'unresponsive_engines': __get_translated_errors(result_container.unresponsive_engines)},  # noqa
                                    default=lambda item: list(item) if isinstance(item, set) else item),
                         mimetype='application/json')
     elif output_format == 'csv':
@@ -649,6 +670,7 @@ def index():
         cont_disp = 'attachment;Filename=searx_-_{0}.csv'.format(search_query.query.decode('utf-8'))
         response.headers.add('Content-Disposition', cont_disp)
         return response
+
     elif output_format == 'rss':
         response_rss = render(
             'opensearch_response_rss.xml',
@@ -692,7 +714,7 @@ def index():
         corrections=correction_urls,
         infoboxes=result_container.infoboxes,
         paging=result_container.paging,
-        unresponsive_engines=result_container.unresponsive_engines,
+        unresponsive_engines=__get_translated_errors(result_container.unresponsive_engines),
         current_language=match_language(search_query.lang,
                                         LANGUAGE_CODES,
                                         fallback=request.preferences.get_value("language")),
@@ -701,6 +723,16 @@ def index():
         favicons=global_favicons[themes.index(get_current_theme_name())],
         timeout_limit=request.form.get('timeout_limit', None)
     )
+
+
+def __get_translated_errors(unresponsive_engines):
+    translated_errors = []
+    for unresponsive_engine in unresponsive_engines:
+        error_msg = gettext(unresponsive_engine[1])
+        if unresponsive_engine[2]:
+            error_msg = "{} {}".format(error_msg, unresponsive_engine[2])
+        translated_errors.append((unresponsive_engine[0], error_msg))
+    return translated_errors
 
 
 @app.route('/about', methods=['GET'])
@@ -930,7 +962,7 @@ def opensearch():
 
     resp = Response(response=ret,
                     status=200,
-                    mimetype="text/xml")
+                    mimetype="application/opensearchdescription+xml")
     return resp
 
 
@@ -955,34 +987,59 @@ def clear_cookies():
 
 @app.route('/config')
 def config():
-    return jsonify({'categories': list(categories.keys()),
-                    'engines': [{'name': name,
-                                 'categories': engine.categories,
-                                 'shortcut': engine.shortcut,
-                                 'enabled': not engine.disabled,
-                                 'paging': engine.paging,
-                                 'language_support': engine.language_support,
-                                 'supported_languages':
-                                 list(engine.supported_languages.keys())
-                                 if isinstance(engine.supported_languages, dict)
-                                 else engine.supported_languages,
-                                 'safesearch': engine.safesearch,
-                                 'time_range_support': engine.time_range_support,
-                                 'timeout': engine.timeout}
-                                for name, engine in engines.items() if request.preferences.validate_token(engine)],
-                    'plugins': [{'name': plugin.name,
-                                 'enabled': plugin.default_on}
-                                for plugin in plugins],
-                    'instance_name': settings['general']['instance_name'],
-                    'locales': settings['locales'],
-                    'default_locale': settings['ui']['default_locale'],
-                    'autocomplete': settings['search']['autocomplete'],
-                    'safe_search': settings['search']['safe_search'],
-                    'default_theme': settings['ui']['default_theme'],
-                    'version': VERSION_STRING,
-                    'doi_resolvers': [r for r in settings['doi_resolvers']],
-                    'default_doi_resolver': settings['default_doi_resolver'],
-                    })
+    """Return configuration in JSON format."""
+    _engines = []
+    for name, engine in engines.items():
+        if not request.preferences.validate_token(engine):
+            continue
+
+        supported_languages = engine.supported_languages
+        if isinstance(engine.supported_languages, dict):
+            supported_languages = list(engine.supported_languages.keys())
+
+        _engines.append({
+            'name': name,
+            'categories': engine.categories,
+            'shortcut': engine.shortcut,
+            'enabled': not engine.disabled,
+            'paging': engine.paging,
+            'language_support': engine.language_support,
+            'supported_languages': supported_languages,
+            'safesearch': engine.safesearch,
+            'time_range_support': engine.time_range_support,
+            'timeout': engine.timeout
+        })
+
+    _plugins = []
+    for _ in plugins:
+        _plugins.append({'name': _.name, 'enabled': _.default_on})
+
+    return jsonify({
+        'categories': list(categories.keys()),
+        'engines': _engines,
+        'plugins': _plugins,
+        'instance_name': settings['general']['instance_name'],
+        'locales': settings['locales'],
+        'default_locale': settings['ui']['default_locale'],
+        'autocomplete': settings['search']['autocomplete'],
+        'safe_search': settings['search']['safe_search'],
+        'default_theme': settings['ui']['default_theme'],
+        'version': VERSION_STRING,
+        'brand': {
+            'GIT_URL': brand.GIT_URL,
+            'DOCS_URL': brand.DOCS_URL
+        },
+        'doi_resolvers': [r for r in settings['doi_resolvers']],
+        'default_doi_resolver': settings['default_doi_resolver'],
+    })
+
+
+@app.route('/translations.js')
+def js_translations():
+    return render(
+        'translations.js.tpl',
+        override_theme='__common__',
+    ), {'Content-Type': 'text/javascript; charset=UTF-8'}
 
 
 @app.errorhandler(404)
