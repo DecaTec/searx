@@ -166,7 +166,7 @@ engines:
     engine : duckduckgo_definitions
     shortcut : ddd
     weight : 2
-    disabled : True
+    disabled : False
 
 # cloudflare protected
 #  - name : digbt
@@ -201,13 +201,13 @@ engines:
   - name : duckduckgo
     engine : duckduckgo
     shortcut : ddg
-    disabled : True
+    disabled : False
 
   - name : duckduckgo images
     engine : duckduckgo_images
     shortcut : ddi
     timeout: 3.0
-    disabled : True
+    disabled : False
 
   - name : etools
     engine : etools
@@ -296,10 +296,12 @@ engines:
   - name : google
     engine : google
     shortcut : go
+    disabled : True
 
   - name : google images
     engine : google_images
     shortcut : goi
+    disabled : True
 
   - name : google news
     engine : google_news
@@ -308,6 +310,7 @@ engines:
   - name : google videos
     engine : google_videos
     shortcut : gov
+    disabled : True
 
   - name : google scholar
     engine : xpath
@@ -535,7 +538,7 @@ engines:
     engine : qwant
     shortcut : qw
     categories : general
-    disabled : True
+    disabled : False
 
   - name : qwant images
     engine : qwant
@@ -617,7 +620,7 @@ engines:
     engine : startpage
     shortcut : sp
     timeout : 6.0
-    disabled : True
+    disabled : False
 
   - name : tokyotoshokan
     engine : tokyotoshokan
@@ -659,7 +662,7 @@ engines:
   - name : yahoo
     engine : yahoo
     shortcut : yh
-    disabled : True
+    disabled : False
 
   - name : yandex
     engine : yandex
